@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Accounts Manager</title>
+
+<style>
+body{
+  font-family:Arial;
+  background:#f4f6fb;
+  margin:0;
+}
+.container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+.card{
+  background:white;
+  padding:25px;
+  width:350px;
+  border-radius:10px;
+  box-shadow:0 5px 15px rgba(0,0,0,0.1);
+}
+input{
+  width:100%;
+  padding:10px;
+  margin:6px 0;
+  border-radius:6px;
+  border:1px solid #ddd;
+}
+button{
+  padding:8px 12px;
+  background:#4f46e5;
+  color:white;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  margin:2px;
+}
+.delete{ background:#dc2626; }
+.dashboard{
+  max-width:1000px;
+  margin:auto;
+  padding:20px;
+}
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+#formBox{
+  background:white;
+  padding:15px;
+  margin-top:15px;
+  border-radius:10px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:20px;
+  background:white;
+  border-radius:10px;
+}
+#profilePreview{
+  width:100px;
+  height:100px;
+  border-radius:50%;
+  display:block;
+  margin:auto;
+  object-fit:cover;
+}
+th,td{
+  padding:12px;
+  border-bottom:1px solid #eee;
+  text-align:center;
+}
+th{
+  background:#4f46e5;
+  color:white;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container" id="authSection">
+<div class="card">
+
+<div id="loginBox">
+<h2>Login</h2>
+<input id="loginEmail" placeholder="Email">
+<input id="loginPassword" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+
+<p>
+<a href="#" onclick="showRegister()">Register</a> |
+<a href="#" onclick="showForgot()">Forgot Password</a>
+</p>
+</div>
+
+<div id="registerBox" style="display:none">
+<h2>Register</h2>
+<input id="name" placeholder="Name">
+<input id="regEmail" placeholder="Email">
+<input id="regPassword" type="password" placeholder="Password">
+<button onclick="register()">Register</button>
+<a href="#" onclick="showLogin()">Back</a>
+</div>
+
+<div id="forgotBox" style="display:none">
+<h2>Forgot Password</h2>
+<input id="forgotEmail" placeholder="Email">
+<button onclick="forgot()">Send</button>
+<a href="#" onclick="showLogin()">Back</a>
+</div>
+
+</div>
+</div>
+
+<div class="dashboard" id="appSection" style="display:none">
+
+<div id="profileBox" style="display:none">
+
+<div id="profilePreviewBox" style="text-align:center; margin-bottom:15px;">
+  <img id="profilePreview" ">
+  <h3 id="previewName"></h3>
+  <p id="previewEmail"></p>
+</div>
+
+<h3>My Profile</h3>
+
+<input id="profileName" placeholder="Name">
+<input id="profileEmail" placeholder="Email">
+<input type="file" id="profileImage">
+
+<button onclick="updateProfile()">Update Profile</button>
+
+</div>
+
+<div class="header">
+<h2>Accounts Manager</h2>
+<div>
+<button onclick="showAddForm()">+ Add</button>
+<button onclick="showProfile()">Profile</button>
+<button onclick="logout()">Logout</button>
+</div>
+</div>
+
+<div id="formBox" style="display:none">
+<input id="accSite" placeholder="Site">
+<input id="accUsername" placeholder="Username">
+<input id="accPassword" placeholder="Password">
+<input type="file" id="accImage">
+<button onclick="save()">Save</button>
+</div>
+
+<table id="table"></table>
+
+</div>
+
+<script>
+const API="http://127.0.0.1:3000";
+
+let editId=null;
+let allAccounts=[];
+
+/* INITIAL STATE */
+authSection.style.display = "flex";
+appSection.style.display = "none";
+
+/* TOKEN FROM EMAIL LOGIN */
+const params = new URLSearchParams(window.location.search);
+const tokenFromUrl = params.get("token");
+
+if(tokenFromUrl){
+  localStorage.setItem("token", tokenFromUrl);
+  window.history.replaceState({}, document.title, "/");
+
+  authSection.style.display="none";
+  appSection.style.display="block";
+  load();
+}
+
+/* LOAD */
+function load(){
+  const token = localStorage.getItem("token");
+
+  fetch(`${API}/accounts`,{
+    headers:{Authorization:"Bearer "+token}
+  })
+  .then(res=>res.json())
+  .then(data=>{
+    allAccounts=data;
+
+    table.innerHTML=`<tr>
+    <th>Site</th><th>Username</th><th>Password</th><th>Image</th><th>Actions</th></tr>`;
+
+    data.forEach(a=>{
+      table.innerHTML+=`
+      <tr>
+      <td>${a.site}</td>
+      <td>${a.username}</td>
+      <td>******</td>
+      <td>${a.image ? `<img src="${API}/uploads/${a.image}" width="40">` : "-"}</td>
+      <td>
+        <button onclick="edit(${a.id})">Update</button>
+        <button class="delete" onclick="del(${a.id})">Delete</button>
+      </td>
+      </tr>`;
+    });
+  });
+}
+
+/* LOGIN */
+function login(){
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value.trim();
+
+  if(!email || !password) return alert("All fields required");
+
+  fetch(`${API}/login`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email,password})
+  })
+  .then(r=>r.json())
+  .then(d=>alert(d.message));
+}
+
+function register(){
+  const name = document.getElementById("name").value.trim();
+  const email = document.getElementById("regEmail").value.trim();
+  const password = document.getElementById("regPassword").value.trim();
+
+  if(!name || !email || !password){
+    return alert("All fields required");
+  }
+
+  fetch(`${API}/register`,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ name, email, password })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    alert(d.message);
+    showLogin(); 
+  });
+}
+
+/* CRUD */
+function save(){
+  const token = localStorage.getItem("token");
+  if(!token){
+    alert("Session expired. Please login again.");
+    return;
+  }
+
+  const site = accSite.value.trim();
+  const username = accUsername.value.trim();
+  const password = accPassword.value.trim();
+
+  if(!site || !username || !password){
+    return alert("All fields are required");
+  }
+
+  if(editId){
+    const fd = new FormData();
+    fd.append("site", site);
+    fd.append("username", username);
+    fd.append("password", password);
+
+    if(accImage.files[0]){
+      fd.append("image", accImage.files[0]);
+    }
+
+    fetch(`${API}/accounts/${editId}`,{
+      method:"PUT",
+      headers:{ Authorization:"Bearer "+token },
+      body:fd
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.success){
+        alert("Update failed");
+        return;
+      }
+
+      formBox.style.display="none";
+      accSite.value="";
+      accUsername.value="";
+      accPassword.value="";
+      accImage.value="";
+      load();
+    });
+
+  } else {
+    const fd=new FormData();
+    fd.append("site",site);
+    fd.append("username",username);
+    fd.append("password",password);
+    if(accImage.files[0]) fd.append("image",accImage.files[0]);
+
+    fetch(`${API}/accounts`,{
+      method:"POST",
+      headers:{Authorization:"Bearer "+token},
+      body:fd
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.success) return alert("Save failed");
+
+      formBox.style.display="none";
+      accSite.value="";
+      accUsername.value="";
+      accPassword.value="";
+      accImage.value="";
+      load();
+    });
+  }
+}
+
+function edit(id){
+  const a = allAccounts.find(x => x.id === id);
+  editId = id;
+  accSite.value = a.site;
+  accUsername.value = a.username;
+  accPassword.value = a.password;
+  formBox.style.display = "block";
+}
+
+function del(id){
+  const token = localStorage.getItem("token");
+
+  fetch(`${API}/accounts/${id}`,{
+    method:"DELETE",
+    headers:{ Authorization:"Bearer "+token }
+  })
+  .then(r=>r.json())
+  .then(()=>{
+    load();
+  });
+}
+
+function showAddForm(){
+  editId = null;
+  accSite.value = "";
+  accUsername.value = "";
+  accPassword.value = "";
+  accImage.value = "";
+  formBox.style.display = "block";
+}
+
+function logout(){
+  fetch(`${API}/logout`,{
+    method:"POST",
+    headers:{ Authorization:"Bearer "+localStorage.getItem("token") }
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    alert(d.message);
+  });
+}
+
+/* PROFILE */
+function updateProfile(){
+  const token = localStorage.getItem("token");
+
+  const fd = new FormData();
+  fd.append("name", profileName.value);
+  fd.append("email", profileEmail.value);
+
+  if(profileImage.files[0]){
+    fd.append("image", profileImage.files[0]);
+  }
+
+  fetch(`${API}/profile`,{
+    method:"PUT",
+    headers:{ Authorization:"Bearer "+token },
+    body:fd
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(!d.success){
+      alert("Update failed");
+      return;
+    }
+    alert("Profile updated successfully");
+    loadProfile();
+  });
+}
+
+function showProfile(){
+  profileBox.style.display = "block";
+  loadProfile();
+}
+
+function loadProfile(){
+  const token = localStorage.getItem("token");
+
+  fetch(`${API}/profile`,{
+    headers:{ Authorization:"Bearer "+token }
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(!d.success) return;
+
+    profileName.value = d.user.name;
+    profileEmail.value = d.user.email;
+
+    previewName.innerText = d.user.name;
+    previewEmail.innerText = d.user.email;
+
+    if(d.user.profile_pic){
+      profilePreview.src = `${API}/uploads/${d.user.profile_pic}`;
+    }
+  });
+}
+
+/* AUTH UI */
+function showRegister(){
+  loginBox.style.display = "none";
+  registerBox.style.display = "block";
+  forgotBox.style.display = "none";
+}
+
+function showLogin(){
+  loginBox.style.display = "block";
+  registerBox.style.display = "none";
+  forgotBox.style.display = "none";
+}
+
+function showForgot(){
+  loginBox.style.display = "none";
+  registerBox.style.display = "none";
+  forgotBox.style.display = "block";
+}
+
+function forgot(){
+  const email = forgotEmail.value.trim();
+
+  if(!email) return alert("Enter your email");
+
+  fetch(`${API}/forgot-password`,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ email })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    alert(d.message);
+  });
+}
+</script>
+
+</body>
+</html>
